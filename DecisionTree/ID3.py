@@ -142,13 +142,13 @@ def ID3(S, A, L, depth, _gain=InformationGain):
     root = node(_value=A_split, _children=[]) # new root node
     for v in A[A_split]:
         subset = [ex for ex in S if v in ex.attr[A_split]] # all examples in s that have value v
-        if subset.count == 0:
+        if len(subset) == 0:
             freq = []
             for l in L:
                 freq.append((l, len([ex for ex in S if ex.label == l])))
             most_common = max(freq, key=lambda k: k[1])[0]
             # branch is terminal
-            root.addChild(node(_value=v,_children=[node(_value=most_common,_children=[],_terminal=True)]))
+            root.addChild(node(_value=v,_nextNode=node(_value=most_common,_children=[],_terminal=True),_children=[] ))
         else: 
             next_A = { a:A[a] for a in A.keys() if a != A_split }
             next_node = ID3(subset, next_A, L, depth-1, _gain)
@@ -192,17 +192,13 @@ def WriteResults(filename, correct, incorrect):
             f.write("{}\n".format(i))
 
 
-#----ENTRY POINT----
-if __name__ == "__main__":
+#------LOAD DATA------
+def Use_data_As_Is(trainFile, testFile):
+    """Q1 Specific"""
     S = []
     Attr = dict()
-    Labels = set() # TODO: does order matter for this problem?
-    training = sys.argv[1]
-    testing = sys.argv[2]
-    depth = int(sys.argv[3])
-
-    # second arg is training, third is testing
-    with open(training, 'r') as f:
+    Labels = set()
+    with open(trainFile, 'r') as f:
         for line in f:
             term = line.strip().split(',')
             for i in range(len(term)-1): # build dictionary of indexable attributes
@@ -213,27 +209,91 @@ if __name__ == "__main__":
             Labels.add(term[-1]) # build set of labels
             S.append(entry(term[:-1], term[-1])) # build list of examples using entry objects
 
+    tests = []
+    with open(testFile, 'r') as f:
+            for line in f:
+                term = line.strip().split(',')
+                tests.append(entry(term[:-1], term[-1]))
+
+    return S, Attr, Labels, tests
+
+
+def Use_Numeric_Median(trainFile, testFile):
+    """Q2 Specific"""
+    S = []
+    Attr = dict()
+    Labels = set()
+    numerics = set()
+    with open(trainFile, 'r') as f:
+        for line in f:
+            term = line.strip().split(',')
+            for i in range(len(term)-1): # build dictionary of indexable attributes
+                try:
+                    # handles numeric values positive and negative
+                    term[i] = int(term[i])
+                    numerics.add(i)
+                    if i in Attr.keys():
+                        Attr[i].append(term[i])
+                    else:
+                        Attr[i] = [term[i]] # needs duplicataes
+                except:
+                    if i in Attr.keys():
+                        Attr[i].add(term[i])
+                    else:
+                        Attr[i] = {term[i]}
+            Labels.add(term[-1]) # build set of labels
+            S.append(entry(term[:-1], term[-1])) # build list of examples using entry objects
+
+    for i in numerics: # index into Attr to replace list of numbers with media
+        temp = sorted(Attr[i])
+        if len(temp) % 2 == 0: # no direct median. Average the two middle values
+            first = int(len(temp)/2)
+            second = int((len(temp)-1)/2)
+            Attr[i] = (temp[first] + temp[second])/2
+        else:
+            Attr[i] = temp[len(temp)/2]
+
+    tests = []
+    with open(testFile, 'r') as f:
+            for line in f:
+                term = line.strip().split(',')
+                tests.append(entry(term[:-1], term[-1]))
+
+    return S, Attr, Labels, tests
+
+
+
+#-------ENTRY POINT--------
+if __name__ == "__main__":
+    training = sys.argv[1]
+    testing = sys.argv[2]
+    depth = int(sys.argv[3])
+
+    S = []
+    Attr = dict()
+    Labels = set()
+    tests = []
+
+    if len(sys.argv) == 4:
+        S, Attr, Labels, tests = Use_data_As_Is(training, testing)
+    else: 
+         S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
+
     # build tree's with the different heuristics
     Info_tree = ID3(S, Attr, Labels, depth, InformationGain)
     ME_tree = ID3(S, Attr, Labels, depth, MajorityErrorGain)
     GI_tree = ID3(S, Attr, Labels, depth, GiniIndexGain)
 
-    tests = []
-    with open(testing, 'r') as f:
-            for line in f:
-                term = line.strip().split(',')
-                tests.append(entry(term[:-1], term[-1]))
-    
-    print("Runing testing on file:", testing)
     #Run tests and write results
+    print("Runing testing on file:", testing)
     c,i = TestDecisionTree(Info_tree, tests)
-    #WriteResults("infoGain.txt", c, i)
     print("InformationGain", " correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    #WriteResults("infoGain.txt", c, i)
 
     c,i = TestDecisionTree(ME_tree, tests)
-    #WriteResults("meGain.txt", c, i)
     print("Majority Error", "  correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    #WriteResults("meGain.txt", c, i)
 
     c,i = TestDecisionTree(GI_tree, tests)
-    #WriteResults("giGain.txt", c, i)
     print("Gini Index", "\t correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    #WriteResults("giGain.txt", c, i)
