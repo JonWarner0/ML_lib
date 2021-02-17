@@ -68,11 +68,11 @@ def MajorityErrorGain(S, A, L):
         d.append(len([ex for ex in S if ex.label == l]))
     d.remove(max(d))
     ME_S = sum(d)/sizeS 
-    #-- Majority Error for each Sv --
     ME_totals = []
     for i in A.keys(): # each attribute
         ME_Av = []
         weights = []
+        #-- Majority Error for each Sv --
         for Av in A[i]: # each value in that attribute
             distribution = []
             cardinality_sv = 0
@@ -100,11 +100,11 @@ def GiniIndexGain(S, A, L):
     for l in L:
         p += (len([ex for ex in S if ex.label == l])/sizeS)**2
     GI_S = 1-p
-    #-- Gini Index for each Sv --
     GI_totals = []
     for i in A.keys(): # each attribute
         GI_Av = []
         weights = []
+        #-- Gini Index for each Sv --
         for Av in A[i]: # each value in that attribute
             distribution = []
             cardinality_sv = 0
@@ -147,7 +147,8 @@ def ID3(S, A, L, depth, _gain=InformationGain):
             for l in L:
                 freq.append((l, len([ex for ex in S if ex.label == l])))
             most_common = max(freq, key=lambda k: k[1])[0]
-            root.addChild(node(_value=v,_children=[node(_value=most_common,_children=[],_terminal=True)])) # branch is terminal
+            # branch is terminal
+            root.addChild(node(_value=v,_children=[node(_value=most_common,_children=[],_terminal=True)]))
         else: 
             next_A = { a:A[a] for a in A.keys() if a != A_split }
             next_node = ID3(subset, next_A, L, depth-1, _gain)
@@ -211,25 +212,28 @@ if __name__ == "__main__":
                     Attr[i] = {term[i]}
             Labels.add(term[-1]) # build set of labels
             S.append(entry(term[:-1], term[-1])) # build list of examples using entry objects
+
     # build tree's with the different heuristics
-    E_tree = ID3(S, Attr, Labels, depth, InformationGain)
+    Info_tree = ID3(S, Attr, Labels, depth, InformationGain)
     ME_tree = ID3(S, Attr, Labels, depth, MajorityErrorGain)
     GI_tree = ID3(S, Attr, Labels, depth, GiniIndexGain)
-    testing = []
-    with open(training, 'r') as f:
+
+    tests = []
+    with open(testing, 'r') as f:
             for line in f:
                 term = line.strip().split(',')
-                testing.append(entry(term[:-1], term[-1]))
+                tests.append(entry(term[:-1], term[-1]))
     
+    print("Runing testing on file:", testing)
     #Run tests and write results
-    c,i = TestDecisionTree(E_tree, testing)
+    c,i = TestDecisionTree(Info_tree, tests)
     #WriteResults("infoGain.txt", c, i)
-    print("InformationGain", " correct:", len(c), " Incorrect:", len(i))
+    print("InformationGain", " correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
 
-    c,i = TestDecisionTree(ME_tree, testing)
+    c,i = TestDecisionTree(ME_tree, tests)
     #WriteResults("meGain.txt", c, i)
-    print("Majority Error", " correct:", len(c), " Incorrect:", len(i))
+    print("Majority Error", "  correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
 
-    c,i = TestDecisionTree(GI_tree, testing)
+    c,i = TestDecisionTree(GI_tree, tests)
     #WriteResults("giGain.txt", c, i)
-    print("Gini Index", " correct:", len(c), " Incorrect:", len(i))
+    print("Gini Index", "\t correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
