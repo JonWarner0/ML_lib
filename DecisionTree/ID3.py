@@ -4,7 +4,7 @@ import sys
 
 #-----HELPER CLASSES AND FUNCTIONS------
 class node:
-    def __init__(self, _value, _nextNode=None, _children=[],  _terminal=False):
+    def __init__(self, _value, _children, _nextNode=None,  _terminal=False):
         self.value = _value
         self.children = _children
         self.terminal = _terminal
@@ -133,13 +133,13 @@ def ID3(S, A, L, depth, _gain=InformationGain):
         for l in L:
             freq.append((l, len([ex for ex in S if ex.label == l])))
         most_common = max(freq, key=lambda k: k[1])[0]
-        return node(_value=most_common, _terminal=True) # return most common label
+        return node(_value=most_common, _children=[], _terminal=True) # return most common label
     if len(purity) == 1:    
-        return node(_value=purity.pop(), _terminal=True) # return the pure lable
+        return node(_value=purity.pop(), _children=[], _terminal=True) # return the pure lable
 
     A_split = _gain(S,A,L) 
 
-    root = node(_value=A_split) # new root node
+    root = node(_value=A_split, _children=[]) # new root node
     for v in A[A_split]:
         subset = [ex for ex in S if v in ex.attr[A_split]] # all examples in s that have value v
         if subset.count == 0:
@@ -147,11 +147,11 @@ def ID3(S, A, L, depth, _gain=InformationGain):
             for l in L:
                 freq.append((l, len([ex for ex in S if ex.label == l])))
             most_common = max(freq, key=lambda k: k[1])[0]
-            root.addChild(node(_value=v,_children=[node(_value=most_common,_terminal=True)])) # branch is terminal
+            root.addChild(node(_value=v,_children=[node(_value=most_common,_children=[],_terminal=True)])) # branch is terminal
         else: 
             next_A = { a:A[a] for a in A.keys() if a != A_split }
             next_node = ID3(subset, next_A, L, depth-1, _gain)
-            n = node(_value=v, _nextNode=next_node)
+            n = node(_value=v, _nextNode=next_node, _children=[])
             root.addChild(n) # v=attribute value, nextnode is subtree
     return root
 
