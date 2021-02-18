@@ -1,0 +1,5 @@
+echo running depth=16
+python3 ID3.py bank/train.csv bank/test.csv 16 -num
+echo 
+python3 ID3.py bank/train.csv bank/train.csv 16 -num
+

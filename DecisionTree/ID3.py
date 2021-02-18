@@ -4,9 +4,9 @@ import sys
 
 #-----HELPER CLASSES AND FUNCTIONS------
 class node:
-    def __init__(self, _value, _children, _nextNode=None,  _terminal=False):
+    def __init__(self, _value, _nextNode=None,  _terminal=False):
         self.value = _value
-        self.children = _children
+        self.children = []
         self.terminal = _terminal
         self.nextNode = _nextNode
     
@@ -28,7 +28,25 @@ def Entropy(p):
     return p*m.log(p,2)
 
 
-#------HEURISTICS-------
+def Probabilies(S,Av,L,i):
+    distribution = []
+    cardinality_sv = 0
+    if type(Av) != str:
+        for l in L: # Av should be a lambda expression containing the median
+            temp = [s for s in S if Av(s.attr[i], MEDIAN_MAP[i]) and s.label == l]
+            distribution.append(len(temp)) 
+            cardinality_sv += len(temp)
+    else:    
+        for l in L: # accumulate entries in attribute Av that have label l
+            temp = [s for s in S if s.attr[i] == Av and s.label == l]
+            distribution.append(len(temp))
+            cardinality_sv += len(temp)
+    return distribution, cardinality_sv
+
+# work around for lambdas not retaining median values
+MEDIAN_MAP = dict()
+
+#------------HEURISTICS-------------
 def InformationGain(S, A, L):
     """ Returns the attribute with the largest information gain """
     #--get Entropy(S)--
@@ -40,18 +58,11 @@ def InformationGain(S, A, L):
     entropy_S = -1*sum(entropy_S) # negative summation for multilabel
     #-- Find hightest gaining attribute --
     gains_of_A = []
-    for i in A.keys(): # each attribute
+    for i in A.keys(): # each attribute index
         H_Av = []
         weights = []
-        for Av in A[i]: # each value in that attribute
-            distribution = []
-            cardinality_sv = 0
-            #--get each Entropy(Sv)--
-            for l in L: # accumulate entries in attribute Av that have label l
-                temp = [s for s in S if s.attr[i] == Av and s.label == l]
-                distribution.append(len(temp)) # occurences of Av & l 
-                cardinality_sv += len(temp)
-            # marginal distributions
+        for Av in A[i]:
+            distribution, cardinality_sv = Probabilies(S,Av,L,i)
             d = [v/cardinality_sv for v in distribution if cardinality_sv != 0] 
             H_Av.append(-1*sum([Entropy(p) for p in d])) #entropy of attribute value
             weights.append(cardinality_sv/sizeS) # sv/s
@@ -69,24 +80,19 @@ def MajorityErrorGain(S, A, L):
     d.remove(max(d))
     ME_S = sum(d)/sizeS 
     ME_totals = []
-    for i in A.keys(): # each attribute
+    for i in A.keys():
         ME_Av = []
         weights = []
         #-- Majority Error for each Sv --
-        for Av in A[i]: # each value in that attribute
-            distribution = []
-            cardinality_sv = 0
-            for l in L: # accumulate entries in attribute Av that have label l
-                temp = [s for s in S if s.attr[i] == Av and s.label == l]
-                distribution.append(len(temp)) # occurences of Av & l 
-                cardinality_sv += len(temp)
-            max_p = max(distribution) #find the max value 
-            d = distribution.remove(max_p) # remove max value so minorities are left
-            if d == None: #handles empty set 
-                ME_Av.append(0) # Majority error for value in attribute
+        for Av in A[i]: #
+            distribution, cardinality_sv = Probabilies(S,Av,L,i)
+            max_p = max(distribution) 
+            distribution.remove(max_p) # remove max value so minorities are left
+            if cardinality_sv == 0 or len(distribution) == 0: #handles if empty cardinalty and card=1 when max was removed
+                ME_Av.append(0) 
                 weights.append(cardinality_sv/sizeS) # sv/s
             else:
-                ME_Av.append(sum(d)/cardinality_sv) # Majority error for value in attribute
+                ME_Av.append(sum(distribution)/cardinality_sv) # Majority error for value in attribute
                 weights.append(cardinality_sv/sizeS) # sv/s
         gain_Av = ME_S-(np.array(weights) @ np.array(ME_Av))
         ME_totals.append((i, gain_Av))
@@ -101,27 +107,21 @@ def GiniIndexGain(S, A, L):
         p += (len([ex for ex in S if ex.label == l])/sizeS)**2
     GI_S = 1-p
     GI_totals = []
-    for i in A.keys(): # each attribute
+    for i in A.keys():
         GI_Av = []
         weights = []
         #-- Gini Index for each Sv --
-        for Av in A[i]: # each value in that attribute
-            distribution = []
-            cardinality_sv = 0
-            for l in L: # accumulate entries in attribute Av that have label l
-                temp = [s for s in S if s.attr[i] == Av and s.label == l]
-                distribution.append(len(temp)) # occurences of Av & l 
-                cardinality_sv += len(temp)
-            # squared marginal distributions
-            d = [(v/cardinality_sv)**2 for v in distribution if cardinality_sv !=0 ] 
-            GI_Av.append(1-sum(d)) # Majority error for value in attribute
+        for Av in A[i]: 
+            distribution, cardinality_sv = Probabilies(S,Av,L,i)
+            d = [(v/cardinality_sv)**2 for v in distribution if cardinality_sv !=0] 
+            GI_Av.append(1-sum(d)) 
             weights.append(cardinality_sv/sizeS) # sv/s
         gain_Av = GI_S-(np.array(weights) @ np.array(GI_Av))
         GI_totals.append((i, gain_Av))
     return max(GI_totals, key=lambda k: k[1])[0]
 
 
-#------TREE CONSTRUCTION-------
+#-------------TREE CONSTRUCTION--------------
 def ID3(S, A, L, depth, _gain=InformationGain):
     """Create a decision tree based off of the input data 
         S=examples, A=attributes, L=labels
@@ -133,31 +133,35 @@ def ID3(S, A, L, depth, _gain=InformationGain):
         for l in L:
             freq.append((l, len([ex for ex in S if ex.label == l])))
         most_common = max(freq, key=lambda k: k[1])[0]
-        return node(_value=most_common, _children=[], _terminal=True) # return most common label
+        return node(_value=most_common, _terminal=True) # return most common label
     if len(purity) == 1:    
-        return node(_value=purity.pop(), _children=[], _terminal=True) # return the pure lable
+        return node(_value=purity.pop(),  _terminal=True) # return the pure lable
 
-    A_split = _gain(S,A,L) 
+    A_split = _gain(S,A,L) # Determine the attribute to split on
+    root = node(_value=A_split) 
 
-    root = node(_value=A_split, _children=[]) # new root node
     for v in A[A_split]:
-        subset = [ex for ex in S if v in ex.attr[A_split]] # all examples in s that have value v
+        subset = []
+        if type(v) != str: # evaluate lambda
+            subset = [ex for ex in S if v(ex.attr[A_split], MEDIAN_MAP[A_split])]
+        else:
+            subset = [ex for ex in S if v in ex.attr[A_split]]
+
         if len(subset) == 0:
             freq = []
             for l in L:
                 freq.append((l, len([ex for ex in S if ex.label == l])))
             most_common = max(freq, key=lambda k: k[1])[0]
             # branch is terminal
-            root.addChild(node(_value=v,_nextNode=node(_value=most_common,_children=[],_terminal=True),_children=[] ))
+            root.addChild(node(_value=v,_nextNode=node(_value=most_common,_terminal=True)))
         else: 
             next_A = { a:A[a] for a in A.keys() if a != A_split }
             next_node = ID3(subset, next_A, L, depth-1, _gain)
-            n = node(_value=v, _nextNode=next_node, _children=[])
-            root.addChild(n) # v=attribute value, nextnode is subtree
+            root.addChild(node(_value=v, _nextNode=next_node)) 
     return root
 
 
-#------ITERATING OVER TREE-------
+#---------ITERATING OVER TREE----------
 def MakeDecision(root, entry):
     if root.terminal:
         return root.value
@@ -166,7 +170,7 @@ def MakeDecision(root, entry):
             return MakeDecision(v.nextNode, entry)
     return None # only occurs if issue with tree construction
 
-#----TESTING EXAMPLES----
+#--------TESTING EXAMPLES---------
 def TestDecisionTree(tree, test_set):
     correct = []
     incorrect = []
@@ -179,7 +183,7 @@ def TestDecisionTree(tree, test_set):
     return correct, incorrect
 
 
-#-----OUTPUT FILE-----
+#-----OUTPUT FILES IF FOR DEBUG-----
 def WriteResults(filename, correct, incorrect):
     with open(filename, "w+") as f:
         f.write("Number Correct: {}\n".format(len(correct)))
@@ -192,7 +196,7 @@ def WriteResults(filename, correct, incorrect):
             f.write("{}\n".format(i))
 
 
-#------LOAD DATA------
+#-------------LOAD DATA--------------
 def Use_data_As_Is(trainFile, testFile):
     """Q1 Specific"""
     S = []
@@ -227,7 +231,7 @@ def Use_Numeric_Median(trainFile, testFile):
     with open(trainFile, 'r') as f:
         for line in f:
             term = line.strip().split(',')
-            for i in range(len(term)-1): # build dictionary of indexable attributes
+            for i in range(len(term)-1): 
                 try:
                     # handles numeric values positive and negative
                     term[i] = int(term[i])
@@ -235,35 +239,37 @@ def Use_Numeric_Median(trainFile, testFile):
                     if i in Attr.keys():
                         Attr[i].append(term[i])
                     else:
-                        Attr[i] = [term[i]] # needs duplicataes
+                        Attr[i] = [term[i]] # needs duplicatates for median
                 except:
                     if i in Attr.keys():
                         Attr[i].add(term[i])
                     else:
                         Attr[i] = {term[i]}
-            Labels.add(term[-1]) # build set of labels
-            S.append(entry(term[:-1], term[-1])) # build list of examples using entry objects
+            Labels.add(term[-1]) 
+            S.append(entry(term[:-1], term[-1])) 
 
     for i in numerics: # index into Attr to replace list of numbers with media
         temp = sorted(Attr[i])
         if len(temp) % 2 == 0: # no direct median. Average the two middle values
-            first = int(len(temp)/2)
-            second = int((len(temp)-1)/2)
-            Attr[i] = (temp[first] + temp[second])/2
+            MEDIAN_MAP[i] = (temp[int(len(S)/2)] + temp[int((len(S)-1)/2)])/2
+            Attr[i] = [lambda v,m: v <= m, lambda v,m: v > m] #FIXME!!!!!
         else:
-            Attr[i] = temp[len(temp)/2]
+            MEDIAN_MAP[i] = temp[len(temp)/2]
+            Attr[i] = [lambda v,m: v <= m, lambda v,m: v > m] 
 
     tests = []
     with open(testFile, 'r') as f:
             for line in f:
                 term = line.strip().split(',')
+                for i in numerics:
+                    term[i] = int(term[i])
                 tests.append(entry(term[:-1], term[-1]))
 
     return S, Attr, Labels, tests
 
 
 
-#-------ENTRY POINT--------
+#-------------ENTRY POINT--------------
 if __name__ == "__main__":
     training = sys.argv[1]
     testing = sys.argv[2]
@@ -276,8 +282,14 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 4:
         S, Attr, Labels, tests = Use_data_As_Is(training, testing)
-    else: 
-         S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
+    elif sys.argv[4] == '-num': 
+        S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
+    elif sys.argv[4] == '-unkn':
+        print("unknown param")
+        exit()
+    else:
+        print("Unkown command sequence")
+        exit()
 
     # build tree's with the different heuristics
     Info_tree = ID3(S, Attr, Labels, depth, InformationGain)
