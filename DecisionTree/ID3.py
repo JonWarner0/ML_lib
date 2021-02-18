@@ -46,6 +46,7 @@ def Probabilies(S,Av,L,i):
 # work around for lambdas not retaining median values
 MEDIAN_MAP = dict()
 
+
 #------------HEURISTICS-------------
 def InformationGain(S, A, L):
     """ Returns the attribute with the largest information gain """
@@ -166,7 +167,9 @@ def MakeDecision(root, entry):
     if root.terminal:
         return root.value
     for v in root.children:
-        if v.value == entry.attr[root.value]:
+        if type(v.value) != str and  v.value(entry.attr[root.value], MEDIAN_MAP[root.value]):
+           return MakeDecision(v.nextNode, entry)
+        elif v.value == entry.attr[root.value]:
             return MakeDecision(v.nextNode, entry)
     return None # only occurs if issue with tree construction
 
@@ -183,7 +186,7 @@ def TestDecisionTree(tree, test_set):
     return correct, incorrect
 
 
-#-----OUTPUT FILES IF FOR DEBUG-----
+#-----OUTPUT FILES FOR DEBUG-----
 def WriteResults(filename, correct, incorrect):
     with open(filename, "w+") as f:
         f.write("Number Correct: {}\n".format(len(correct)))
