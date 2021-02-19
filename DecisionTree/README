@@ -16,6 +16,7 @@ NOTE: Output contains both test and training errors
 	python3 ID3.py <trainfile> <testfile> <depth> <flag>
 
 Flag Options:
+	No flag runs with each numeric attribute treated as a distinct value. 
 	'-num'   :  For numeric values to split based on median.
 	'-unkn'  :  Same as '-num' but with replacement of 'unkown' values.
 
