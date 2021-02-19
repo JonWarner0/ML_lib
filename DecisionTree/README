@@ -1,8 +1,11 @@
 # Commands to run the program
 
 1. Execute with: 
-
-	./run_car.txt 		# Runs on the car dataset, depths 1-6.
+	
+	./run.sh		# Runs all three required instances with all required depths.
+	
+	---For Individual Runs---
+	./run_car.txt 		# Runs the car dataset, depths 1-6.
 	./run_bank.txt		# Runs the bank dataset with numeric median, depths 1-16.
 	./run_bank_unkn.txt	# Runs the bank dataset with median and replacement of 'unkown'values, depths 1-16.
 

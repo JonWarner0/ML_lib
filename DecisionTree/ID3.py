@@ -48,8 +48,7 @@ MEDIAN_MAP = dict()
 
 #------------HEURISTICS-------------
 def InformationGain(S, A, L):
-    """ Returns the attribute with the largest information gain """
-    #--get Entropy(S)--
+    #--Entropy(S)--
     sizeS = len(S)
     entropy_S = []
     for l in L: 
@@ -100,7 +99,7 @@ def MajorityErrorGain(S, A, L):
 
 def GiniIndexGain(S, A, L):
     sizeS = len(S)
-    #-- Majority Error of S --
+    #-- Gini Index of S --
     p = 0
     for l in L:
         p += (len([ex for ex in S if ex.label == l])/sizeS)**2
@@ -134,7 +133,7 @@ def ID3(S, A, L, depth, _gain=InformationGain):
         most_common = max(freq, key=lambda k: k[1])[0]
         return node(_value=most_common, _terminal=True) # return most common label
     if len(purity) == 1:    
-        return node(_value=purity.pop(),  _terminal=True) # return the pure lable
+        return node(_value=purity.pop(),  _terminal=True) # return the pure label
 
     A_split = _gain(S,A,L) # Determine the attribute to split on
     root = node(_value=A_split) 
@@ -308,13 +307,13 @@ if __name__ == "__main__":
     print("Runing testing on file:", testing)
 
     c,i = TestDecisionTree(Info_tree, tests)
-    print("InformationGain", " correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    print("InformationGain", " Correct:", len(c), " Incorrect:", len(i), " Error:", len(i)/len(tests))
 
     c,i = TestDecisionTree(ME_tree, tests)
-    print("Majority Error", "  correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    print("Majority Error", "  Eorrect:", len(c), " Incorrect:", len(i), " Error:", len(i)/len(tests))
 
     c,i = TestDecisionTree(GI_tree, tests)
-    print("Gini Index", "\t correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
+    print("Gini Index", "\t Correct:", len(c), " Incorrect:", len(i), " Error:", len(i)/len(tests))
 
     #Easy output for LaTeX tables
     # c1,i1 = TestDecisionTree(Info_tree, tests)
