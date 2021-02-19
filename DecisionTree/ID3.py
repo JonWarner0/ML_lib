@@ -46,7 +46,6 @@ def Probabilies(S,Av,L,i):
 # work around for lambdas not retaining median values
 MEDIAN_MAP = dict()
 
-
 #------------HEURISTICS-------------
 def InformationGain(S, A, L):
     """ Returns the attribute with the largest information gain """
@@ -64,8 +63,8 @@ def InformationGain(S, A, L):
         weights = []
         for Av in A[i]:
             distribution, cardinality_sv = Probabilies(S,Av,L,i)
-            d = [v/cardinality_sv for v in distribution if cardinality_sv != 0] 
-            H_Av.append(-1*sum([Entropy(p) for p in d])) #entropy of attribute value
+            d = [Entropy(v/cardinality_sv) for v in distribution if cardinality_sv != 0] 
+            H_Av.append(-1*sum(d)) #entropy of attribute value
             weights.append(cardinality_sv/sizeS) # sv/s
         gain_Av = entropy_S-(np.array(weights) @ np.array(H_Av)) #entropy(S)-expected entropy
         gains_of_A.append((i, gain_Av))
@@ -78,8 +77,8 @@ def MajorityErrorGain(S, A, L):
     d = []
     for l in L:
         d.append(len([ex for ex in S if ex.label == l]))
-    d.remove(max(d))
-    ME_S = sum(d)/sizeS 
+    max_p = max(d)
+    ME_S = 1-(max_p/sizeS)
     ME_totals = []
     for i in A.keys():
         ME_Av = []
@@ -88,12 +87,11 @@ def MajorityErrorGain(S, A, L):
         for Av in A[i]: #
             distribution, cardinality_sv = Probabilies(S,Av,L,i)
             max_p = max(distribution) 
-            distribution.remove(max_p) # remove max value so minorities are left
-            if cardinality_sv == 0 or len(distribution) == 0: #handles if empty cardinalty and card=1 when max was removed
+            if cardinality_sv == 0 or len(distribution) == 1: 
                 ME_Av.append(0) 
                 weights.append(cardinality_sv/sizeS) # sv/s
             else:
-                ME_Av.append(sum(distribution)/cardinality_sv) # Majority error for value in attribute
+                ME_Av.append(1-(max_p/cardinality_sv)) # Majority error for value in attribute
                 weights.append(cardinality_sv/sizeS) # sv/s
         gain_Av = ME_S-(np.array(weights) @ np.array(ME_Av))
         ME_totals.append((i, gain_Av))
@@ -129,7 +127,7 @@ def ID3(S, A, L, depth, _gain=InformationGain):
         depth = tree depth, _gain = splitting heuristic
     """
     purity = {ex.label for ex in S}
-    if len(purity) == 0 or depth == 0 or len(A.keys())==0:
+    if len(purity) == 0 or depth < 0 or len(A.keys())==0:
         freq = []
         for l in L:
             freq.append((l, len([ex for ex in S if ex.label == l])))
@@ -186,19 +184,6 @@ def TestDecisionTree(tree, test_set):
     return correct, incorrect
 
 
-#-----OUTPUT FILES FOR DEBUG-----
-def WriteResults(filename, correct, incorrect):
-    with open(filename, "w+") as f:
-        f.write("Number Correct: {}\n".format(len(correct)))
-        f.write("Number Incorrect: {}\n\n".format(len(incorrect)))
-        f.write("------Correct Instances-------\n")
-        for c in correct:
-            f.write("{}\n".format(c))
-        f.write("\n------Incorrect Instances------\n")
-        for i in incorrect:
-            f.write("{}\n".format(i))
-
-
 #-------------LOAD DATA--------------
 def Use_data_As_Is(trainFile, testFile):
     """Q1 Specific"""
@@ -225,12 +210,14 @@ def Use_data_As_Is(trainFile, testFile):
     return S, Attr, Labels, tests
 
 
-def Use_Numeric_Median(trainFile, testFile):
+def Use_Numeric_Median(trainFile, testFile, replace=False):
     """Q2 Specific"""
     S = []
     Attr = dict()
     Labels = set()
     numerics = set()
+    unknowns = set()
+    
     with open(trainFile, 'r') as f:
         for line in f:
             term = line.strip().split(',')
@@ -244,6 +231,8 @@ def Use_Numeric_Median(trainFile, testFile):
                     else:
                         Attr[i] = [term[i]] # needs duplicatates for median
                 except:
+                    if replace and term[i] == 'unknown':
+                        unknowns.add(i)
                     if i in Attr.keys():
                         Attr[i].add(term[i])
                     else:
@@ -255,15 +244,32 @@ def Use_Numeric_Median(trainFile, testFile):
         temp = sorted(Attr[i])
         if len(temp) % 2 == 0: # no direct median. Average the two middle values
             MEDIAN_MAP[i] = (temp[int(len(S)/2)] + temp[int((len(S)-1)/2)])/2
-            Attr[i] = [lambda v,m: v <= m, lambda v,m: v > m] #FIXME!!!!!
+            Attr[i] = [lambda v,m: v <= m, lambda v,m: v > m] 
         else:
             MEDIAN_MAP[i] = temp[len(temp)/2]
             Attr[i] = [lambda v,m: v <= m, lambda v,m: v > m] 
+
+    if replace:
+        unkn_record = dict()
+        for i in unknowns:
+            counts = {v:0 for v in Attr[i] if v != 'unknown'}
+            for s in S:
+                if s.attr[i] != 'unknown':
+                    counts[s.attr[i]] += 1
+            common = max(counts.keys(), key=lambda k: counts[k])
+            unkn_record[i] = common
+            for s in S:
+                if s.attr[i] == 'unknown':
+                    s.attr[i] = common
 
     tests = []
     with open(testFile, 'r') as f:
             for line in f:
                 term = line.strip().split(',')
+                if replace:
+                    for i in range(len(term)):
+                        if term[i] == 'unknown':
+                            term[i] = unkn_record[i]
                 for i in numerics:
                     term[i] = int(term[i])
                 tests.append(entry(term[:-1], term[-1]))
@@ -288,8 +294,7 @@ if __name__ == "__main__":
     elif sys.argv[4] == '-num': 
         S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
     elif sys.argv[4] == '-unkn':
-        print("unknown param")
-        exit()
+        S, Attr, Labels, tests = Use_Numeric_Median(training, testing, True)
     else:
         print("Unkown command sequence")
         exit()
@@ -299,16 +304,20 @@ if __name__ == "__main__":
     ME_tree = ID3(S, Attr, Labels, depth, MajorityErrorGain)
     GI_tree = ID3(S, Attr, Labels, depth, GiniIndexGain)
 
-    #Run tests and write results
+    # Run tests and print results
     print("Runing testing on file:", testing)
+
     c,i = TestDecisionTree(Info_tree, tests)
     print("InformationGain", " correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
-    #WriteResults("infoGain.txt", c, i)
 
     c,i = TestDecisionTree(ME_tree, tests)
     print("Majority Error", "  correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
-    #WriteResults("meGain.txt", c, i)
 
     c,i = TestDecisionTree(GI_tree, tests)
     print("Gini Index", "\t correct:", len(c), " Incorrect:", len(i), " error:", len(i)/len(tests))
-    #WriteResults("giGain.txt", c, i)
+
+    #Easy output for LaTeX tables
+    # c1,i1 = TestDecisionTree(Info_tree, tests)
+    # c2,i2 = TestDecisionTree(ME_tree, tests)
+    # c3,i3 = TestDecisionTree(GI_tree, tests)
+    # print(len(i1)/len(tests), len(i2)/len(tests), len(i3)/len(tests))

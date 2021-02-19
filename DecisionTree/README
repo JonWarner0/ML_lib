@@ -1,0 +1,19 @@
+# Commands to run the program
+
+1. Execute with: 
+
+	./run_car.txt 		# Runs on the car dataset, depths 1-6.
+	./run_bank.txt		# Runs the bank dataset with numeric median, depths 1-16.
+	./run_bank_unkn.txt	# Runs the bank dataset with median and replacement of 'unkown'values, depths 1-16.
+
+NOTE: Output contains both test and training errors
+
+2. To run with other data sets the format is as follows:
+
+	python3 ID3.py <trainfile> <testfile> <depth> <flag>
+
+Flag Options:
+	'-num'   :  For numeric values to split based on median.
+	'-unkn'  :  Same as '-num' but with replacement of 'unkown' values.
+
+
