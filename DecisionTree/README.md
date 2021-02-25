@@ -1,4 +1,5 @@
-# Commands to run the program
+# Decision Tree
+# Heuristics: Information Gain, Majority Error, Gini Index
 
 1. Execute with: 
 	
@@ -20,4 +21,4 @@ Flag Options:
 	'-num'   :  For numeric values to split based on median.
 	'-unkn'  :  Same as '-num' but with replacement of 'unkown' values.
 
-
+When run, three trees are constructed corresponding to each heuristic respectively.
