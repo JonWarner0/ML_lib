@@ -1,1 +1,1 @@
-#Boosting and Bagging algoriths
+Boosting and Bagging algorithms
