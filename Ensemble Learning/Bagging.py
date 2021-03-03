@@ -1,6 +1,8 @@
 import numpy as np
 import math as m
 import sys
+import random 
+import threading
 
 #-----HELPER CLASSES AND FUNCTIONS------
 class node:
@@ -112,11 +114,75 @@ def ID3(S, A, L, depth, _gain=InformationGain):
 
 
 #--------Bagging---------
-def Bagging():
-    pass
+def Bagging(S,A,L,T):
+    m = len(S)
+    max_depth = len(A.keys())
+    tree_bag = []
+    for _ in range(T):
+        samples = [] # m'
+        for _ in range(m):
+            samples.append(S[random.randint(0,m-1)]) # prevent upper inclusivity
+        root = ID3(samples,A,L,max_depth,InformationGain)
+        tree_bag.append(root)
+    return tree_bag
 
-def EvalBagging():
-    pass
+
+def EvalBagging(tree_bag, test_set, T):
+    correct = 0
+    incorrect = 0
+    for test in test_set:
+        votes = 0
+        for tree in tree_bag:
+            votes += Decision(tree, test)
+        hypothesis = 1 if votes >=0 else -1
+        if test.label  == hypothesis:
+            correct += 1
+        else:
+            incorrect += 1
+    return correct, incorrect
+
+#---------Bias and Variance---------
+def Bias_Var_Decomp(S,A,L,T,t_start, t_end):
+    m = 1000
+    max_depth = len(A.keys())
+    tree_bag = []
+    for i in range(t_start, t_end):
+        sub_bag = []
+        for _ in range(T):
+            no_replace_S = S.copy()
+            samples = [] # m'
+            for _ in range(m): # no replacement
+                idx = random.randint(0, len(no_replace_S)-1)
+                ex = no_replace_S[idx]
+                no_replace_S.remove(ex)
+                samples.append(ex) 
+            root = ID3(samples,A,L,max_depth,InformationGain)
+            sub_bag.append(root)
+        #tree_bag.append(sub_bag)
+        THREAD_RESULTS[i] = sub_bag
+    #return tree_bag
+
+
+def Calc_Bias_Var(tree_bag, test_set):
+    first_trees = [t[0] for t in tree_bag]
+    n = len(first_trees)
+    general_bias = 0
+    general_var = 0
+    general_squared_error = 0
+    all_bias_var = []
+    for test in test_set:
+        predictions = []
+        for tree in first_trees:
+            predictions.append(Decision(tree,test))
+        avg = sum(predictions)/n
+        bias = (avg - test.label)**2
+        variance = 1/(n-1)*sum((x-avg)**2 for x in predictions)
+        general_bias += bias
+        general_var += variance
+        all_bias_var.append((bias,variance))
+    single = all_bias_var[0][0] + all_bias_var[0][1]
+    return single, general_bias/n, general_var/n, 
+
 
 #---------ITERATING OVER TREE----------
 def Decision(root, entry):
@@ -129,17 +195,6 @@ def Decision(root, entry):
             return Decision(v.nextNode, entry)
     return None # only occurs if issue with tree construction
 
-#--------TESTING EXAMPLES---------
-def TestDecisionTree(tree, test_set):
-    correct = []
-    incorrect = []
-    for entry in test_set:
-        decision = Decision(tree, entry)
-        if decision == entry.label:
-            correct.append((entry.label, decision))
-        else:
-            incorrect.append((entry.label, decision))
-    return correct, incorrect
 
 
 #-------------LOAD DATA--------------
@@ -195,8 +250,9 @@ def Use_Numeric_Median(trainFile, testFile, replace=False):
                         Attr[i].add(term[i])
                     else:
                         Attr[i] = {term[i]}
-            Labels.add(term[-1]) 
-            S.append(entry(term[:-1], term[-1])) 
+            l = 1 if term[-1] == 'yes' else -1
+            Labels.add(l) 
+            S.append(entry(term[:-1], l)) 
 
     for i in numerics: # index into Attr to replace list of numbers with media
         temp = sorted(Attr[i])
@@ -230,17 +286,19 @@ def Use_Numeric_Median(trainFile, testFile, replace=False):
                             term[i] = unkn_record[i]
                 for i in numerics:
                     term[i] = int(term[i])
-                tests.append(entry(term[:-1], term[-1]))
+                l = 1 if term[-1] == 'yes' else -1
+                tests.append(entry(term[:-1], l))
 
     return S, Attr, Labels, tests
 
 
+THREAD_RESULTS = [None for _ in range(100)]
 
 #-------------ENTRY POINT--------------
 if __name__ == "__main__":
     training = sys.argv[1]
     testing = sys.argv[2]
-    depth = int(sys.argv[3])
+    T = int(sys.argv[3])
 
     S = []
     Attr = dict()
@@ -257,3 +315,25 @@ if __name__ == "__main__":
         print("Unkown command sequence")
         exit()
 
+    threads = []
+    for i in range(0, 100, 20):
+        t = threading.Thread(target=Bias_Var_Decomp, args=(S,Attr,Labels,T,i,i+20))
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join()
+
+    single, gb, gv = Calc_Bias_Var(THREAD_RESULTS, tests)
+    #tree_bag = Bias_Var_Decomp(S,Attr,Labels,T)
+    #single, gb, gv, gse = Calc_Bias_Var(tree_bag, test_set)
+    print("------Bias/Varience-----")
+    print("Single learner:", single)
+    print("General Bias:", gb, " General Var:", gv, " General SE:", gb+gv)
+
+    exit()
+
+    tree_bag = Bagging(S,Attr, Labels, T)
+    c, i = EvalBagging(tree_bag,tests,T)
+    print("\nIteration: ", T)
+    print("Bagging: " , " Correct: ", c, " Incorrect:", i, " Error:", i/len(tests))
+    print('--------------------------------------')
