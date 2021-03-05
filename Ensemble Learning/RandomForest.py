@@ -4,6 +4,11 @@ import sys
 import random 
 import threading
 
+# work around for lambdas not retaining median values
+MEDIAN_MAP = dict()
+RAND_FOREST_NUM = 6
+
+
 #-----HELPER CLASSES AND FUNCTIONS------
 class node:
     def __init__(self, _value, _nextNode=None,  _terminal=False):
@@ -21,9 +26,6 @@ class entry:
         """Attributes is an array of the attribute values"""
         self.attr = atttributes
         self.label = label
-
-# work around for lambdas not retaining median values
-MEDIAN_MAP = dict()
 
 
 def Entropy(p):
@@ -74,13 +76,13 @@ def InformationGain(S, A, L):
 
 
 #-------------TREE CONSTRUCTION--------------
-def ID3(S, A, L, depth, _gain=InformationGain):
+def ID3(S, A, L, _gain=InformationGain):
     """Create a decision tree based off of the input data 
         S=examples, A=attributes, L=labels
         depth = tree depth, _gain = splitting heuristic
     """
     purity = {ex.label for ex in S}
-    if len(purity) == 0 or depth < 0 or len(A.keys())==0:
+    if len(purity) == 0 or len(A.keys())==0:
         freq = []
         for l in L:
             freq.append((l, len([ex for ex in S if ex.label == l])))
@@ -89,7 +91,18 @@ def ID3(S, A, L, depth, _gain=InformationGain):
     if len(purity) == 1:    
         return node(_value=purity.pop(),  _terminal=True) # return the pure label
 
-    A_split = _gain(S,A,L) # Determine the attribute to split on
+    A_split = None
+    # Random forest splitting
+    if len(A) > RAND_FOREST_NUM:
+        G = dict()
+        keys = [k for k in A.keys()] #needed due to non-contiguous ordering of keys
+        while len(G.keys()) < RAND_FOREST_NUM: # Creating subset G to decrease similarity
+            k = keys[random.randint(0, len(keys)-1)]
+            G[k] = A[k]
+        A_split = _gain(S,G,L) # Determine the attribute to split on
+    else:
+        A_split = _gain(S,A,L)
+
     root = node(_value=A_split) 
 
     for v in A[A_split]:
@@ -108,7 +121,7 @@ def ID3(S, A, L, depth, _gain=InformationGain):
             root.addChild(node(_value=v,_nextNode=node(_value=most_common,_terminal=True)))
         else: 
             next_A = { a:A[a] for a in A.keys() if a != A_split }
-            next_node = ID3(subset, next_A, L, depth-1, _gain)
+            next_node = ID3(subset, next_A, L, _gain)
             root.addChild(node(_value=v, _nextNode=next_node)) 
     return root
 
@@ -116,13 +129,12 @@ def ID3(S, A, L, depth, _gain=InformationGain):
 #--------Bagging---------
 def Bagging(S,A,L,T):
     m = len(S)
-    max_depth = len(A.keys())
     tree_bag = []
     for _ in range(T):
         samples = [] # m'
         for _ in range(m):
             samples.append(S[random.randint(0,m-1)]) # prevent upper inclusivity
-        root = ID3(samples,A,L,max_depth,InformationGain)
+        root = ID3(samples,A,L,InformationGain)
         tree_bag.append(root)
     return tree_bag
 
@@ -141,6 +153,7 @@ def EvalBagging(tree_bag, test_set, T):
             incorrect += 1
     return correct, incorrect
 
+
 #---------Bias and Variance---------
 def Bias_Var_Decomp(S,A,L,T,t_start, t_end):
     m = 1000
@@ -156,7 +169,7 @@ def Bias_Var_Decomp(S,A,L,T,t_start, t_end):
                 samples.append(ex)            
         sub_bag = []
         for _ in range(T):
-            root = ID3(samples,A,L,max_depth,InformationGain)
+            root = ID3(samples,A,L,InformationGain)
             sub_bag.append(root)
         THREAD_RESULTS[i] = sub_bag
 
@@ -331,6 +344,15 @@ if __name__ == "__main__":
         print("Unkown command sequence")
         exit()
 
+    tree_bag = Bagging(S,Attr, Labels, T)
+    c, i = EvalBagging(tree_bag,tests,T)
+    print("\nIteration: ", T)
+    print("Bagging: " , " Correct: ", c, " Incorrect:", i, " Error:", i/len(tests))
+    print('--------------------------------------')
+
+# Below is bias/variance decomposition
+    exit()
+
     threads = []
     for i in range(0, 100, 20):
         t = threading.Thread(target=Bias_Var_Decomp, args=(S,Attr,Labels,T,i,i+20))
@@ -347,11 +369,3 @@ if __name__ == "__main__":
     gb, gv = Calc_Bias_Var(THREAD_RESULTS, tests)
     print("Tree Bag")
     print("General Bias:", gb, " General Var:", gv, " General SE:", gb+gv)
-
-    exit()
-
-    tree_bag = Bagging(S,Attr, Labels, T)
-    c, i = EvalBagging(tree_bag,tests,T)
-    print("\nIteration: ", T)
-    print("Bagging: " , " Correct: ", c, " Incorrect:", i, " Error:", i/len(tests))
-    print('--------------------------------------')
