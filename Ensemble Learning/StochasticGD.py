@@ -18,15 +18,15 @@ def Calc_Gradient(X,w,j):
 
 def GradientDescent(X,w,r,threshold):
     while True:
-        J = []
-        for j in range(len(w)):
-            J.append(Calc_Gradient(X,w,j))
-        new_w = w - r*np.array(J)
-        error = LA.norm(w-new_w, ord=2)
-        #print(error)
-        if error <= threshold:
-            return w
-        w = new_w
+        for ex in X:
+            new_w = []
+            for j in range(len(w)):
+                new_w.append(w[j] + r*(ex.y - w.T @ ex.x)*ex.x[j])
+            error = LA.norm(w-new_w, ord=2)
+            #print(error)
+            if error <= threshold:
+                return w
+            w = np.array(new_w)
 
 
 def Eval(f, tests):
@@ -49,6 +49,16 @@ def ReadFile(file):
     return vals
 
 
+def Calculate_Optimal(train):
+    x = []
+    y = []
+    for t in train:
+        x.append(t.x)
+        y.append(t.y)
+    X = np.array(x)
+    Y = np.array(y)
+    print('Optimal:',LA.inv(X.T @ X) @ (X.T @ Y))
+
 if __name__ == '__main__':  
     training_f = sys.argv[1]
     testing_f = sys.argv[2]
@@ -64,4 +74,6 @@ if __name__ == '__main__':
     error = Eval(function, tests)
     print(function)
     print("Cost:", error)
+
+    Calculate_Optimal(train)
 

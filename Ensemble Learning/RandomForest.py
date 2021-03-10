@@ -323,36 +323,7 @@ def Use_Numeric_Median(trainFile, testFile, replace=False):
 
 THREAD_RESULTS = [None for _ in range(100)]
 
-#-------------ENTRY POINT--------------
-if __name__ == "__main__":
-    training = sys.argv[1]
-    testing = sys.argv[2]
-    T = int(sys.argv[3])
-
-    S = []
-    Attr = dict()
-    Labels = set()
-    tests = []
-
-    if len(sys.argv) == 4:
-        S, Attr, Labels, tests = Use_data_As_Is(training, testing)
-    elif sys.argv[4] == '-num': 
-        S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
-    elif sys.argv[4] == '-unkn':
-        S, Attr, Labels, tests = Use_Numeric_Median(training, testing, True)
-    else:
-        print("Unkown command sequence")
-        exit()
-
-    tree_bag = Bagging(S,Attr, Labels, T)
-    c, i = EvalBagging(tree_bag,tests,T)
-    print("\nIteration: ", T)
-    print("Bagging: " , " Correct: ", c, " Incorrect:", i, " Error:", i/len(tests))
-    print('--------------------------------------')
-
-# Below is bias/variance decomposition
-    exit()
-
+def runBiasVariance(S,A,L,T,tests):
     threads = []
     for i in range(0, 100, 20):
         t = threading.Thread(target=Bias_Var_Decomp, args=(S,Attr,Labels,T,i,i+20))
@@ -369,3 +340,36 @@ if __name__ == "__main__":
     gb, gv = Calc_Bias_Var(THREAD_RESULTS, tests)
     print("Tree Bag")
     print("General Bias:", gb, " General Var:", gv, " General SE:", gb+gv)
+    exit()
+
+#-------------ENTRY POINT--------------
+if __name__ == "__main__":
+    training = sys.argv[1]
+    testing = sys.argv[2]
+    T = int(sys.argv[3])
+
+    S = []
+    Attr = dict()
+    Labels = set()
+    tests = []
+
+    if len(sys.argv) == 4:
+        S, Attr, Labels, tests = Use_data_As_Is(training, testing)
+    elif sys.argv[4] == '-num': 
+        S, Attr, Labels, tests = Use_Numeric_Median(training, testing)
+        if len(sys.argv) == 6:
+            runBiasVariance(S,Attr,Labels,T,tests)
+    elif sys.argv[4] == '-unkn':
+        S, Attr, Labels, tests = Use_Numeric_Median(training, testing, True)
+    else:
+        print("Unkown command sequence")
+        exit()
+
+    tree_bag = Bagging(S,Attr, Labels, T)
+    c, i = EvalBagging(tree_bag,tests,T)
+    print("\nIteration: ", T)
+    print("Bagging: " , " Correct: ", c, " Incorrect:", i, " Error:", i/len(tests))
+    print('--------------------------------------')
+
+
+
