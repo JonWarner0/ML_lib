@@ -20,9 +20,3 @@ do
     python3 RandomForest.py bank/train.csv bank/test.csv $i -num
 done
 
-echo ------ Batch Gradient Descent ------
-python3 BatchGD.py concrete/train.csv concrete/test.csv
-
-echo ------ Stochastic Gradient Descent ------
-python3 StochasticGD.py concrete/train.csv concrete/test.csv
-
