@@ -57,18 +57,21 @@ def DL_DW(w,z,dimNodes):
         s = sigmoid_cache[j%dimNodes]
         # flatten array - consume all weights for a given node with z idx
         dLw.append(DLZ_CACHE[-1][j%dimNodes]*s*(1-s)*z[j//dimNodes])
-    DLW_CACHE.append(np.array(dLw))
+    DLW_CACHE.append(dLw)
 
 
 def BackPropigation(weights, z_vals, ex, prediction, dimNodes, dimLayers):
     OuputLayer_BP(weights[-1],z_vals[-1],ex,prediction) # special case
     for i in range(dimLayers-1,1,-1): # navigate backwards
         w = weights[i]
-        z = np.array(z_vals[i])
+        z = np.array([1]+z_vals[i])
         DL_DW(w,z,dimNodes)
         DL_DZ(w,z,dimNodes, i)
-    DL_DW(weights[0], z_vals[0], dimNodes) # input layer doesnt update z
-    
+    # input layer doesnt update z
+    DL_DW(weights[0][:len(ex[0])*dimNodes], z_vals[0], dimNodes)
+    needed_size = len(DLW_CACHE[-2])
+    actual_size = len(DLW_CACHE[-1]) # adjustment for NP array
+    DLW_CACHE[-1] += [0 for _ in range(needed_size-actual_size)]
 
 def Sigmoid(w,z):
     return 1/(1+math.exp(w@z))
@@ -76,34 +79,45 @@ def Sigmoid(w,z):
 
 def ForwardPass(ex, weights, dimNodes, dimLayers):
     x,y = ex
-    Z = [list(ex[0])]
-    for i in range(dimLayers-1):
+    Z = [[v for v in ex[0]]]
+    zi = []
+    # input layer
+    for j in range(dimNodes): 
+            w = np.array([weights[0][k] for k in range(j,len(ex[0])*dimNodes,dimNodes)])
+            zi.append(Sigmoid(w,x))
+    x = np.array([1]+zi)
+    Z.append(zi)
+
+    # Hidden layers
+    for i in range(1,dimLayers-1):
         zi = []
         for j in range(dimNodes):
             w = np.array([weights[i][k] for k in range(j,len(weights[i]),dimNodes)])
             zi.append(Sigmoid(w,x))
-        x = np.array(zi)
+        x = np.array([1]+zi)
         Z.append(zi)
-    # only use the first N weights corresponding to nodes to the output layer
-    prediction = x @ weights[-1][:dimNodes] 
+
+    # output layer
+    prediction = x @ weights[-1][:dimNodes+1] 
     return prediction, Z
     
 
 def SGD(data, dimNodes, dimLayers):
     global DLW_CACHE
     global DLZ_CACHE
-    # +dimNodes accounts for the bias term TODO add it back in
-    w = np.array([np.zeros(dimNodes*dimNodes) for _ in range(dimLayers)])
+    w = np.array([np.zeros(dimNodes*(dimNodes+1)) for _ in range(dimLayers)])
+    for i in range(dimLayers): #adjust the bias term to 1
+        w[i][:dimNodes+1] = 1
     for t in range(10):
         data = Shuffle(data)
         for ex in data:
             prediction, Z = ForwardPass(ex,w,dimNodes,dimLayers)
             BackPropigation(w, Z, ex, prediction, dimNodes, dimLayers)
-            w = w - Gamma(0.001, t, 0.5)*np.array(DLW_CACHE)
+            d = np.array([np.array(v) for v in DLW_CACHE]) 
+            w = w - Gamma(0.00001, t, 0.5)*d
             DLW_CACHE.clear()
             DLZ_CACHE.clear()
     return w
-
 
 
 def testModel(model, tests, dimNodes, dimLayers):
@@ -130,7 +144,7 @@ def readFile(input_file):
 
 
 
-def bpData():
+def hw_Validation_Data():
     data = [(np.array([1,1,1]),1)]
     w = np.array([[-1,1,-2,2,-3,3,1,1,1],
                 [-1,1,-2,2,-3,3,1,1,1],
@@ -145,6 +159,11 @@ if __name__ == '__main__':
     dimLayers = int(sys.argv[4])
 
     model = SGD(train, dimNodes, dimLayers)
-    print(model)
+
+    print('training')
+    c,i = testModel(model, train, dimNodes, dimLayers)
+    print('NN: ', 'Width', dimNodes, '\tCorrect: ', c, '\tIncorrect: ', i, '\tError: ',i/(c+i))
+
+    print('\ntesting')
     c,i = testModel(model, test, dimNodes, dimLayers)
-    print('NN: ', '\tCorrect: ', c, '\tIncorrect: ', i, '\tError: ',i/(c+i))
+    print('NN: ', 'Width', dimNodes, '\tCorrect: ', c, '\tIncorrect: ', i, '\tError: ',i/(c+i))
