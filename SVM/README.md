@@ -12,6 +12,7 @@ Run the respective SVM model with the following:
 	python3 svmGauss.py <train> <test> <C_idx> <gamma_idx>
 
 Where:
+
 	 <C_idx> exists in [0:2]
 	 <gamma_idx> exists in [0:4]
 
