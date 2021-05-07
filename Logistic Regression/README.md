@@ -13,4 +13,4 @@ Run using a specific estimation function:
 Flag Options:
 	
 	--map:	Maximum a Posteriori
-	--mle:	Maximum Likelihood
+	--mle:	Maximum Likelihood 
